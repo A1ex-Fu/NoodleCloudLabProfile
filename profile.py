@@ -1,77 +1,62 @@
-# -*- coding: utf-8 -*-
 #
-# CloudLab profile: 4 nodes on a shared LAN running vrpaxos.
-# Compatible with Python 2.7 (no f-strings, no non-ASCII chars).
+# 4 nodes (replica0, witness, replica2, client) on one LAN.
 #
 import geni.portal as portal
 import geni.rspec.pg as pg
 
-pc      = portal.Context()
-request = pc.makeRequestRSpec()
+class G:
+    image   = ("urn:publicid:IDN+emulab.net+image+emulab-ops//"
+               "UBUNTU22-64-STD")
+    base_ip = "10.10.1."
+    mask    = "255.255.255.0"
+    repo    = "https://github.com/A1ex-Fu/vrpaxos.git"
 
-# ---------- parameters ----------
-pc.defineParameter("phystype",  "Physical node type",
-                   portal.ParameterType.STRING, "",
-                   longDescription="Leave blank for any available type.")
+pc = portal.Context()
+rs = pc.makeRequestRSpec()
 
-pc.defineParameter("linkSpeed", "LAN link speed",
-                   portal.ParameterType.INTEGER, 1000000,
-                   [(100000,  "100Mb/s"),
-                    (1000000, "1Gb/s"),
-                    (10000000,"10Gb/s")])
-
+pc.defineParameter("phystype",  "Node type", portal.ParameterType.STRING, "")
+pc.defineParameter("lanMbps",   "LAN speed (Mb/s)",
+                   portal.ParameterType.INTEGER, 1000,
+                   [(100, "100"), (1000, "1000"), (10000, "10000")])
 params = pc.bindParameters()
 
-# ---------- constants ----------
-NODE_COUNT = 4
-BASE_IP    = "10.10.1."
-PORT_START = 8080
-DISK_IMAGE = ("urn:publicid:IDN+emulab.net+image+emulab-ops//"
-              "UBUNTU22-64-STD")
-GIT_URL    = "https://github.com/A1ex-Fu/vrpaxos.git"
-
 # ---------- LAN ----------
-lan = request.LAN("lan0")
-lan.bandwidth = params.linkSpeed
+lan = rs.LAN("lan0")
+lan.bandwidth = params.lanMbps
 
 nodes = []
-ips   = []
+roles = ["replica0", "witness", "replica2", "client"]
 
-# ---------- create nodes ----------
-for i in range(NODE_COUNT):
-    node = request.RawPC("node%d" % i)
-    node.disk_image = DISK_IMAGE
+for idx, role in enumerate(roles):
+    n = rs.RawPC(role)
+    n.disk_image = G.image
     if params.phystype:
-        node.hardware_type = params.phystype
-
-    iface = node.addInterface("eth1")
-    ip    = "%s%d" % (BASE_IP, i + 2)  # 10.10.1.2, .3, ...
-    iface.addAddress(pg.IPv4Address(ip, "255.255.255.0"))
+        n.hardware_type = params.phystype
+    iface = n.addInterface("eth1")
+    iface.addAddress(pg.IPv4Address("%s%d" % (G.base_ip, idx+2), G.mask))
     lan.addInterface(iface)
+    nodes.append(n)
 
-    nodes.append(node)
-    ips.append(ip)
+# ---------- helper to drop a file ----------
+def add_script(node, name, content):
+    node.addFile(pg.File("/local/repository/" + name, content))
+    node.addService(pg.Execute(shell="bash",
+                    command="chmod +x /local/repository/%s" % name))
 
-# ---------- build testConfig2.txt ----------
-config_lines = ["f 0"]
-for idx, ip in enumerate(ips):
-    config_lines.append("replica %s:%d" % (ip, PORT_START + idx))
-config_text = "\\n".join(config_lines)
+# ---------- upload the three scripts ----------
+add_script(nodes[0], "setup-replica.sh", open("setup-replica.sh").read())
+add_script(nodes[1], "setup-witness.sh", open("setup-witness.sh").read())
+add_script(nodes[2], "setup-replica.sh", open("setup-replica.sh").read())
+add_script(nodes[3], "setup-client.sh",  open("setup-client.sh").read())
 
-clone_cmd  = "git clone %s ~/vrpaxos" % GIT_URL
-config_cmd = "echo -e \"%s\" > ~/testConfig2.txt" % config_text
+# ---------- execute them ----------
+nodes[0].addService(pg.Execute(shell="bash",
+            command="/local/repository/setup-replica.sh 0"))
+nodes[1].addService(pg.Execute(shell="bash",
+            command="/local/repository/setup-witness.sh 1"))
+nodes[2].addService(pg.Execute(shell="bash",
+            command="/local/repository/setup-replica.sh 2"))
+nodes[3].addService(pg.Execute(shell="bash",
+            command="/local/repository/setup-client.sh 3"))
 
-run_cmds = [
-    "cd ~/vrpaxos && ./bench/replica -c ~/testConfig2.txt -i 0 -m vr",
-    "cd ~/vrpaxos && ./bench/replica -c ~/testConfig2.txt -i 1 -w -m vr",
-    "cd ~/vrpaxos && ./bench/replica -c ~/testConfig2.txt -i 2 -m vr",
-    "cd ~/vrpaxos && ./bench/client  -c ~/testConfig2.txt -m vr -n 1000 -t 1 -w 5 -l latency.txt"
-]
-
-for idx, node in enumerate(nodes):
-    node.addService(pg.Execute(shell="bash", command=clone_cmd))
-    node.addService(pg.Execute(shell="bash", command=config_cmd))
-    node.addService(pg.Execute(shell="bash", command=run_cmds[idx]))
-
-# ---------- output ----------
-pc.printRequestRSpec(request)
+pc.printRequestRSpec(rs)

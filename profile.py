@@ -23,8 +23,9 @@ params = pc.bindParameters()
 switch = emulab.Switch("switch")
 switch.hardware_type = params.phystype
 
-# Create nodes and interfaces
 nodes = []
+switch_ifs = []
+
 for i in range(4):
     node = rspec.RawPC("node{}".format(i))
     node.hardware_type = "xl170"
@@ -32,22 +33,19 @@ for i in range(4):
     iface = node.addInterface()
     ip_addr = "{}{}".format(BASE_IP, i + 1)
     iface.addAddress(pg.IPv4Address(ip_addr, NETMASK))
-    nodes.append((node, iface))
+    nodes.append(node)
 
-# Create switch interfaces
-switch_ifs = [switch.addInterface() for _ in range(4)]
+    sw_iface = switch.addInterface()
+    switch_ifs.append(sw_iface)
 
-# Create LAN to connect all nodes and switch
-lan = emulab.LAN("lan0")
+    # Create L1Link between node interface and switch interface
+    link = rspec.L1Link("link{}".format(i))
+    link.addInterface(iface)
+    link.addInterface(sw_iface)
 
-# Connect each node and switch interface to LAN
-for (node, iface), sw_iface in zip(nodes, switch_ifs):
-    lan.addInterface(iface)
-    lan.addInterface(sw_iface)
-
-# Add bandwidth and latency shaping to LAN (if supported)
-lan.bandwidth = params.bandwidth  # in Mbps
-lan.latency = params.latency       # in ms
+    # Add bandwidth and latency shaping on this link
+    link.bandwidth = params.bandwidth  # Mbps
+    link.latency = params.latency       # ms
 
 def add_node_script(idx, node):
     config_lines = [
@@ -64,7 +62,7 @@ def add_node_script(idx, node):
         cmd = "./bench/replica -c ./testConfig2.txt -i 1 -w -m vr"
     elif idx == 2:
         cmd = "./bench/replica -c ./testConfig2.txt -i 2 -m vr"
-    else:  # client node
+    else:
         cmd = "./bench/client -c ./testConfig2.txt -m vr -n 1000 -t 1 -w 5 -l latency.txt"
 
     script = (
@@ -78,8 +76,7 @@ def add_node_script(idx, node):
 
     node.addService(pg.Execute(shell="bash", command=script))
 
-
-for idx, (node, _) in enumerate(nodes):
-    add_node_script(idx, node)
+for i, node in enumerate(nodes):
+    add_node_script(i, node)
 
 pc.printRequestRSpec(rspec)

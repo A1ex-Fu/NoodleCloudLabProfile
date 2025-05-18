@@ -5,6 +5,7 @@ exec > /local/run.out 2>&1
 apt-get update -y
 apt-get install -y git build-essential
 git clone https://github.com/A1ex-Fu/vrpaxos.git /local/vrpaxos
+cd vrpaxos
 cat >/local/vrpaxos/testConfig2.txt <<EOF
 f 0
 replica 10.10.1.2:8080

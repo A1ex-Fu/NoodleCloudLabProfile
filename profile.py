@@ -1,5 +1,5 @@
 # CloudLab profile: 4 nodes (replica0, witness, replica2, client) on one LAN
-# With configurable LAN speed and node type
+# Now fixed to match successful profiles' structure
 import geni.portal as portal
 import geni.rspec.pg as pg
 
@@ -11,42 +11,36 @@ class G:
 pc = portal.Context()
 rs = pc.makeRequestRSpec()
 
-# Configurable parameters
+# Parameters
 pc.defineParameter("phystype",  "Node type", portal.ParameterType.STRING, "")
 pc.defineParameter("lanMbps",   "LAN speed (Mb/s)",
                    portal.ParameterType.INTEGER, 1000,
                    [(100, "100 Mbps"), (1000, "1 Gbps"), (10000, "10 Gbps")])
+pc.defineParameter("user", "User", portal.ParameterType.STRING, "yourusername")
 params = pc.bindParameters()
 
-# ---------- LAN ----------
+# LAN
 lan = rs.LAN("lan0")
 lan.bandwidth = params.lanMbps
 
-# ---------- Node definitions ----------
-nodes = []
+# Nodes
 roles = ["replica0", "witness", "replica2", "client"]
+setup_scripts = ["setup-replica.sh", "setup-witness.sh", "setup-replica.sh", "setup-client.sh"]
+run_args = ["0", "1", "2", "3"]
 
 for idx, role in enumerate(roles):
-    n = rs.RawPC(role)
-    n.disk_image = G.image
+    node = rs.RawPC(role)
+    node.disk_image = G.image
     if params.phystype:
-        n.hardware_type = params.phystype
-    iface = n.addInterface("eth1")
+        node.hardware_type = params.phystype
+
+    iface = node.addInterface("eth1")
     iface.addAddress(pg.IPv4Address("%s%d" % (G.base_ip, idx+2), G.mask))
     lan.addInterface(iface)
-    nodes.append(n)
 
-# ---------- Helper function ----------
-def upload_and_run_script(node, script_name, run_args=""):
-    path = "/local/repository/" + script_name
-    node.addService(pg.Execute(shell="bash",
-        command="chmod +x {0} && sudo {0} {1}".format(path, run_args)))
+    # Set up startup script (no sudo, no chmod, run as user)
+    script = "/local/repository/" + setup_scripts[idx]
+    cmd = "%s %s" % (script, run_args[idx])
+    node.addService(pg.Execute(shell="bash", command="sudo -u {} -H {}".format(params.user, cmd)))
 
-# ---------- Upload and run startup scripts ----------
-upload_and_run_script(nodes[0], "setup-replica.sh", "0")
-upload_and_run_script(nodes[1], "setup-witness.sh", "1")
-upload_and_run_script(nodes[2], "setup-replica.sh", "2")
-upload_and_run_script(nodes[3], "setup-client.sh",  "3")
-
-# ---------- Finalize ----------
 pc.printRequestRSpec(rs)

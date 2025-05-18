@@ -1,50 +1,52 @@
+# CloudLab profile: 4 nodes (replica0, witness, replica2, client) on one LAN
+# With configurable LAN speed and node type
 import geni.portal as portal
 import geni.rspec.pg as pg
-import geni.rspec.emulab as emulab
 
 class G:
-    image = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD"
+    image   = ("urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD")
     base_ip = "10.10.1."
-    mask = "255.255.255.0"
-    repo = "https://github.com/A1ex-Fu/vrpaxos.git"
+    mask    = "255.255.255.0"
 
 pc = portal.Context()
-request = pc.makeRequestRSpec()
+rs = pc.makeRequestRSpec()
 
-# Parameters
-pc.defineParameter("lanMbps",   "LAN speed (Mb/s)", portal.ParameterType.INTEGER, 1000,
-                   [(100, "100"), (1000, "1000"), (10000, "10000")])
+# Configurable parameters
+pc.defineParameter("phystype",  "Node type", portal.ParameterType.STRING, "")
+pc.defineParameter("lanMbps",   "LAN speed (Mb/s)",
+                   portal.ParameterType.INTEGER, 1000,
+                   [(100, "100 Mbps"), (1000, "1 Gbps"), (10000, "10 Gbps")])
 params = pc.bindParameters()
 
-# LAN
-lan = request.LAN("lan0")
+# ---------- LAN ----------
+lan = rs.LAN("lan0")
 lan.bandwidth = params.lanMbps
 
-roles = ["replica0", "witness", "replica2", "client"]
+# ---------- Node definitions ----------
 nodes = []
+roles = ["replica0", "witness", "replica2", "client"]
 
-# Create nodes and assign IPs
 for idx, role in enumerate(roles):
-    node = request.RawPC(role)
-    node.disk_image = G.image
-
-
-    iface = node.addInterface("eth1")
-    iface.addAddress(pg.IPv4Address(f"{G.base_ip}{idx+2}", G.mask))
+    n = rs.RawPC(role)
+    n.disk_image = G.image
+    if params.phystype:
+        n.hardware_type = params.phystype
+    iface = n.addInterface("eth1")
+    iface.addAddress(pg.IPv4Address("%s%d" % (G.base_ip, idx+2), G.mask))
     lan.addInterface(iface)
-    nodes.append(node)
+    nodes.append(n)
 
-# Add startup script logic
+# ---------- Helper function ----------
 def upload_and_run_script(node, script_name, run_args=""):
-    path = f"/local/repository/{script_name}"
+    path = "/local/repository/" + script_name
     node.addService(pg.Execute(shell="bash",
-        command=f"chmod +x {path} && sudo {path} {run_args}"))
+        command="chmod +x {0} && sudo {0} {1}".format(path, run_args)))
 
-# Upload and execute the setup scripts
+# ---------- Upload and run startup scripts ----------
 upload_and_run_script(nodes[0], "setup-replica.sh", "0")
 upload_and_run_script(nodes[1], "setup-witness.sh", "1")
 upload_and_run_script(nodes[2], "setup-replica.sh", "2")
 upload_and_run_script(nodes[3], "setup-client.sh",  "3")
 
-# Output RSpec
-pc.printRequestRSpec(request)
+# ---------- Finalize ----------
+pc.printRequestRSpec(rs)

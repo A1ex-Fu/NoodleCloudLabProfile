@@ -51,8 +51,12 @@ for i, role in enumerate(roles):
         client_ip = G.base_ip + "5"
         cmd = "{} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
 
-    # Run as specified user, with home env
-    node.addService(pg.Execute(shell="bash", command="sudo -u {} -H {}".format(params.user, cmd)))
+    # Log output for debugging
+    log_file = "/local/repository/{}_setup.log".format(role)
+    full_cmd = "sudo -u {} -H bash {} > {} 2>&1".format(params.user, cmd, log_file)
+
+    # Execute the script using bash explicitly
+    node.addService(pg.Execute(shell="bash", command=full_cmd))
 
 # Print RSpec
 pc.printRequestRSpec(rs)

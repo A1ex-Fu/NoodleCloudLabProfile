@@ -2,7 +2,7 @@
 sudo apt-get update 
 sudo apt-get install -y build-essential git pkg-config protobuf-compiler libprotobuf-dev libevent-dev libssl-dev libunwind-dev libgtest-dev
 git clone https://github.com/A1ex-Fu/vrpaxos.git /local/vrpaxos
-cd vrpaxos
+cd /local/vrpaxos || exit 1
 cat >/local/vrpaxos/testConfig2.txt <<EOF
 f 0
 replica 10.10.1.2:8080

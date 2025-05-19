@@ -6,7 +6,6 @@ class G:
     image   = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD"
     base_ip = "10.10.1."
     mask    = "255.255.255.0"
-    user    = "afu3"  # Hardcoded username
 
 pc = portal.Context()
 rs = pc.makeRequestRSpec()
@@ -42,22 +41,17 @@ for i, role in enumerate(roles):
 
     # Prepare script and command
     script_path = "/local/repository/{}".format(scripts[i])
-    log_file = "/local/repository/{}_setup.log".format(role)
-
     if role == "client":
         # Client connects to all replicas (IPs .2, .4) and witness (.3)
         targets = "10.10.1.2 10.10.1.3 10.10.1.4"
-        cmd = "{} {} {}".format(script_path, params.branch, targets)
+        cmd = "bash {} {} {}".format(script_path, params.branch, targets)
     else:
         # Pass: branch, node index, IP, client IP
         client_ip = G.base_ip + "5"
-        cmd = "{} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
+        cmd = "bash {} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
 
-    # Full execution command, logs output
-    full_cmd = "bash {} > {} 2>&1".format(cmd, log_file)
+    # Run as hardcoded user afu3 with home env
+    node.addService(pg.Execute(shell="bash", command="sudo -u afu3 -H {}".format(cmd)))
 
-    # Run command at boot as afu3
-    node.addService(pg.Execute(shell="bash", command="sudo -u {} -H {}".format(G.user, full_cmd)))
-
-# Output RSpec
+# Print RSpec
 pc.printRequestRSpec(rs)

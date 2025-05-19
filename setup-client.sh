@@ -11,4 +11,4 @@ replica 10.10.1.4:8082
 EOF
 cd /local/vrpaxos
 make
-./bench/client -c testConfig2.txt -m vr -n 1000 -t 1 -w 5 -l latency.txt &
+nohup ./bench/client -c testConfig2.txt -m vr -n 1000 -t 1 -w 5 -l latency.txt &

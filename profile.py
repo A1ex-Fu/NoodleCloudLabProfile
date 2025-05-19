@@ -50,8 +50,8 @@ for i, role in enumerate(roles):
         client_ip = G.base_ip + "5"
         cmd = "bash {} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
 
-    # Run as hardcoded user afu3 with home env
-    node.addService(pg.Execute(shell="bash", command="sudo -u afu3 -H {}".format(cmd)))
+    # Run as hardcoded user geniuser with home env
+    node.addService(pg.Execute(shell="bash", command="sudo -u geniuser -H {}".format(cmd)))
 
 # Print RSpec
 pc.printRequestRSpec(rs)

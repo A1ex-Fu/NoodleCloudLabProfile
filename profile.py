@@ -6,6 +6,7 @@ class G:
     image   = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD"
     base_ip = "10.10.1."
     mask    = "255.255.255.0"
+    user    = "afu3"  # Hardcoded username
 
 pc = portal.Context()
 rs = pc.makeRequestRSpec()
@@ -15,7 +16,6 @@ pc.defineParameter("phystype",  "Node type", portal.ParameterType.STRING, "")
 pc.defineParameter("lanMbps",   "LAN speed (Mb/s)",
                    portal.ParameterType.INTEGER, 1000,
                    [(100, "100 Mbps"), (1000, "1 Gbps"), (10000, "10 Gbps")])
-pc.defineParameter("user", "Username to run startup scripts under", portal.ParameterType.STRING, "kwzhao")
 pc.defineParameter("branch", "Git branch of EMU or app code to checkout", portal.ParameterType.STRING, "main")
 params = pc.bindParameters()
 
@@ -42,6 +42,8 @@ for i, role in enumerate(roles):
 
     # Prepare script and command
     script_path = "/local/repository/{}".format(scripts[i])
+    log_file = "/local/repository/{}_setup.log".format(role)
+
     if role == "client":
         # Client connects to all replicas (IPs .2, .4) and witness (.3)
         targets = "10.10.1.2 10.10.1.3 10.10.1.4"
@@ -51,12 +53,11 @@ for i, role in enumerate(roles):
         client_ip = G.base_ip + "5"
         cmd = "{} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
 
-    # Log output for debugging
-    log_file = "/local/repository/{}_setup.log".format(role)
-    full_cmd = "sudo -u {} -H bash {} > {} 2>&1".format(params.user, cmd, log_file)
+    # Full execution command, logs output
+    full_cmd = "bash {} > {} 2>&1".format(cmd, log_file)
 
-    # Execute the script using bash explicitly
-    node.addService(pg.Execute(shell="bash", command=full_cmd))
+    # Run command at boot as afu3
+    node.addService(pg.Execute(shell="bash", command="sudo -u {} -H {}".format(G.user, full_cmd)))
 
-# Print RSpec
+# Output RSpec
 pc.printRequestRSpec(rs)

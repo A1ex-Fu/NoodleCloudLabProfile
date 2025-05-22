@@ -12,3 +12,4 @@ EOF
 cd /local/vrpaxos
 make
 nohup ./bench/replica -c testConfig2.txt -i "$1" -m vr &
+tail -f /dev/null

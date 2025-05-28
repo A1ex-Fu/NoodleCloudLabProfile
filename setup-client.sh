@@ -25,4 +25,4 @@ cd /local/specpaxos
 make
 touch /local/specpaxos/latency.txt
 ./bench/client -c testConfig2.txt -m vr -n 1000 -t 1 -w 5 -l /local/specpaxos/latency.txt &
-sleep 5
+sleep 60

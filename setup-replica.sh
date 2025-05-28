@@ -27,3 +27,4 @@ EOF
 cd /local/specpaxos
 make
 ./bench/replica -c ./testConfig.txt -i "$1" -m spec
+sleep 60

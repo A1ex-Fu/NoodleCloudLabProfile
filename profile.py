@@ -1,4 +1,4 @@
-# CloudLab profile: 4 nodes (replica0, witness, replica2, client) on one LAN
+# CloudLab profile: Fixed 4-node LAN with same node type and LAN speed options as smalllan
 import geni.portal as portal
 import geni.rspec.pg as pg
 
@@ -10,11 +10,18 @@ class G:
 pc = portal.Context()
 rs = pc.makeRequestRSpec()
 
-# Parameters
-pc.defineParameter("phystype",  "Node type", portal.ParameterType.STRING, "")
-pc.defineParameter("lanMbps",   "LAN speed (Mb/s)",
+# Use NODETYPE param to match original smalllan script behavior
+pc.defineParameter("phystype",  "Optional physical node type",
+                   portal.ParameterType.NODETYPE, "",
+                   longDescription="Pick a single physical node type (pc3000,d710,etc) " +
+                   "instead of letting the resource mapper choose for you.")
+
+# Same LAN speed options
+pc.defineParameter("lanMbps", "LAN speed (Mb/s)",
                    portal.ParameterType.INTEGER, 1000,
                    [(100, "100 Mbps"), (1000, "1 Gbps"), (10000, "10 Gbps")])
+
+# Optional code branch param (safe to keep for flexibility)
 pc.defineParameter("branch", "Git branch of EMU or app code to checkout", portal.ParameterType.STRING, "main")
 params = pc.bindParameters()
 
@@ -22,36 +29,31 @@ params = pc.bindParameters()
 lan = rs.LAN("lan0")
 lan.bandwidth = params.lanMbps
 
-# Roles and associated setup scripts
+# Node names and setup scripts
 roles = ["replica0", "witness", "replica2", "client"]
 scripts = ["setup-replica.sh", "setup-witness.sh", "setup-replica.sh", "setup-client.sh"]
 
-# Create nodes
+# Create and configure each node
 for i, role in enumerate(roles):
     node = rs.RawPC(role)
     node.disk_image = G.image
     if params.phystype:
         node.hardware_type = params.phystype
 
-    # Set up interface with IP address
     iface = node.addInterface("eth1")
-    ip = G.base_ip + str(i + 2)  # e.g. 10.10.1.2 through .5
+    ip = G.base_ip + str(i + 2)
     iface.addAddress(pg.IPv4Address(ip, G.mask))
     lan.addInterface(iface)
 
-    # Prepare script and command
-    script_path = "/local/repository/{}".format(scripts[i])
+    # Setup command
+    script = f"/local/repository/{scripts[i]}"
     if role == "client":
-        # Client connects to all replicas (IPs .2, .4) and witness (.3)
         targets = "10.10.1.2 10.10.1.3 10.10.1.4"
-        cmd = "bash {} {} {}".format(script_path, params.branch, targets)
+        cmd = f"bash {script} {params.branch} {targets}"
     else:
-        # Pass: branch, node index, IP, client IP
         client_ip = G.base_ip + "5"
-        cmd = "bash {} {} {} {} {}".format(script_path, params.branch, i, ip, client_ip)
+        cmd = f"bash {script} {params.branch} {i} {ip} {client_ip}"
 
-    # Run as hardcoded user geniuser with home env
-    node.addService(pg.Execute(shell="bash", command="sudo -u geniuser -H {}".format(cmd)))
+    node.addService(pg.Execute(shell="bash", command=f"sudo -u geniuser -H {cmd}"))
 
-# Print RSpec
 pc.printRequestRSpec(rs)
